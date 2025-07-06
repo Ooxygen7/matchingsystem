@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase 遊戲匹配與聊天</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --light-bg: #f8f9fa;
+            --dark-text: #343a40;
+            --light-text: #fff;
+            --border-color: #dee2e6;
+        }
+     
+        @keyframes gradient-animation {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+        }
+      
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        
+        /* --- 以下是新增和修改的樣式 --- */
+        /* 選擇一組好看的漸變色 */
+        background: linear-gradient(45deg, #a1c4fd, #c2e9fb, #fbc2eb, #a6c1ee);
+        /* 將背景尺寸擴大，這是讓動畫看起來像在移動的關鍵 */
+        background-size: 400% 400%;
+        /* 應用動畫：動畫名稱、持續時間15秒、速度曲線ease、無限循環 */
+        animation: gradient-animation 15s ease infinite;
+         }
+        #status {margin-bottom: 20px;}
+        .container { width: 90%; max-width: 400px; text-align: center; background-color: var(--light-text); padding: 30px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); transition: all 0.3s ease-in-out; }
+        h1, h2, h3 { color: var(--dark-text); }
+        .hidden { display: none; }
+        .btn { padding: 12px 24px; font-size: 1em; color: var(--light-text); background-color: var(--primary-color); border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.3s; font-weight: 500; }
+        .btn:hover { background-color: #0056b3; }
+        .btn:disabled { background-color: #cccccc; cursor: not-allowed; }
+        input[type="text"] { width: calc(100% - 24px); padding: 12px; margin-bottom: 15px; border: 1px solid var(--border-color); border-radius: 5px; font-size: 1em; }
+
+        /* 準備確認介面樣式 */
+        #ready-check-view h2 { color: var(--success-color); font-size: 2em; margin-bottom: 20px; }
+        .players-display { display: flex; justify-content: space-around; align-items: center; margin: 30px 0; }
+        .player-card { display: flex; flex-direction: column; align-items: center; }
+        .player-card .username { font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+        .player-card .ready-status { font-size: 2.5em; height: 45px; opacity: 0;transition: opacity 0.3s ease;}
+        .vs-separator { font-size: 2em; font-weight: bold; color: var(--secondary-color); }
+        .action-buttons { display: flex; justify-content: center; gap: 20px; }
+        #ready-btn { background-color: var(--success-color); }
+        #decline-btn { background-color: var(--danger-color); }
+        .progress-bar-container { width: 100%; height: 8px; background-color: var(--border-color); border-radius: 4px; margin-top: 30px; overflow: hidden; }
+        #progress-bar { width: 100%; height: 100%; background-color: var(--primary-color); border-radius: 4px; transition: width 20s linear; }
+
+        /* 聊天室樣式 */
+        #chat-view .container { max-width: 500px; }
+        #room-info { margin-bottom: 20px; padding: 15px; background-color: var(--light-bg); border-radius: 8px; }
+        #chat-window { display: flex; flex-direction: column; height: 40vh; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+        #chat-messages { flex-grow: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; background-color: #fdfdfd; }
+        .message { max-width: 75%; padding: 10px 15px; border-radius: 18px; line-height: 1.4; word-wrap: break-word; }
+        .message .sender { font-size: 0.8em; font-weight: bold; margin-bottom: 4px; color: var(--secondary-color); }
+        .my-message { background-color: var(--primary-color); color: var(--light-text); align-self: flex-end; text-align: right; }
+        .my-message .sender { color: rgba(255,255,255,0.8); }
+        .opponent-message { background-color: #e9ecef; color: var(--dark-text); align-self: flex-start; text-align: left; }
+        /* 新增：系統訊息樣式 */
+        .system-message { align-self: center; background-color: #f0f0f0; color: #888; font-size: 0.9em; font-style: italic; padding: 5px 12px; border-radius: 12px; margin: 4px 0; }
+        #chat-input-area { display: flex; align-items: center; padding: 10px; border-top: 1px solid var(--border-color); background-color: var(--light-bg); }
+        #chat-input { flex-grow: 1; margin: 0; margin-right: 10px; }
+        #ready-btn:disabled {background-color: #90d8a1;cursor: not-allowed;}
+        /* --- 全局加載動畫樣式 --- */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #loading-spinner {
+            position: fixed; /* 固定在視窗上 */
+            bottom: 25px;    /* 距離底部 25px */
+            left: 50%;       /* 水平置中 */
+            transform: translateX(-50%);
+            width: 40px;
+            height: 40px;
+            border: 5px solid rgba(255, 255, 255, 0.3); /* 淺色外圈 */
+            border-top-color: var(--primary-color);   /* 主題色上圈 */
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            z-index: 1000; /* 確保在最上層 */
+        }
+        /* --- 自訂彈出視窗 (Custom Alert Modal) 樣式 --- */
+
+        /* 遮罩層：覆蓋整個畫面，將背景變暗 */
+        #custom-alert-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6); /* 半透明黑色背景 */
+            z-index: 2000; /* 確保在最頂層 */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* 從頂部對齊 */
+            padding-top: 10vh; /* 距離頂部 10% 的視窗高度 */
+            
+            /* 預設為隱藏，用於動畫 */
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        /* 彈窗盒子本身 */
+        .custom-alert-box {
+            background-color: #ffffff;
+            padding: 35px 40px;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); /* 精緻的懸浮陰影 */
+            width: 90%;
+            max-width: 420px;
+            text-align: center;
+            
+            /* 預設位置在螢幕外 (-50px)，用於滑入動畫 */
+            transform: translateY(-50px);
+            transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* 訊息文字樣式 */
+        #custom-alert-message {
+            font-size: 1.15em;
+            color: var(--dark-text);
+            line-height: 1.6; /* 舒適的行高 */
+            margin: 0;
+            margin-bottom: 30px; /* 與按鈕的間距 */
+        }
+
+        /* 當遮罩層可見時的動畫效果 */
+        #custom-alert-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        #custom-alert-overlay.visible .custom-alert-box {
+            transform: translateY(0); /* 滑入到正常位置 */
+        }
+    </style>
+</head>
+<body>
+    
+    <div id="username-view" class="container">
+        <h1>设定你的名称</h1>
+        <input type="text" id="username-input" placeholder="其他用户将看见此名称" maxlength="15">
+        <button id="confirm-username-btn" class="btn" disabled>正在链接服务器...</button>
+    </div>
+
+    <div id="lobby" class="container hidden">
+        <h1>等候大厅</h1>
+        <p>玩家: <strong id="player-username"></strong></p>
+        <div id="status">点击进入匹配队列</div>
+        <button id="match-btn" class="btn">开始匹配</button>
+        <button id="cancel-btn" class="btn hidden" style="background-color: var(--secondary-color);">取消匹配</button>
+    </div>
+
+    <div id="ready-check-view" class="container hidden">
+        <h2>匹配成功！</h2>
+        <div class="players-display">
+            <div class="player-card">
+                <div id="my-ready-username" class="username">我的名字</div>
+                <div id="my-ready-status" class="ready-status"></div>
+            </div>
+            <div class="vs-separator">VS</div>
+            <div class="player-card">
+                <div id="opponent-ready-username" class="username">對手名字</div>
+                <div id="opponent-ready-status" class="ready-status"></div>
+            </div>
+        </div>
+        <div class="action-buttons">
+            <button id="ready-btn" class="btn">准备</button>
+            <button id="decline-btn" class="btn">拒绝</button>
+        </div>
+        <div class="progress-bar-container">
+            <div id="progress-bar"></div>
+        </div>
+    </div>
+
+    <div id="chat-view" class="container hidden">
+        <h3>房间内</h3>
+        <div id="room-info">
+            <p>房间 ID: <strong id="room-id"></strong></p>
+            <p>对手: <strong id="opponent-username"></strong></p>
+        </div>
+        <div id="chat-window">
+            <div id="chat-messages"></div>
+            <div id="chat-input-area">
+                <input type="text" id="chat-input" placeholder="输入讯息...">
+                <button id="send-btn" class="btn">发送</button>
+            </div>
+        </div>
+        <br>
+        <button id="leave-chat-btn" class="btn" style="background-color: #dc3545;">离开房间</button>
+    </div>
+    
+<div id="loading-spinner" class="hidden"></div>
+
+    <div id="custom-alert-overlay" class="hidden">
+        <div class="custom-alert-box">
+            <p id="custom-alert-message"></p>
+            <button id="custom-alert-close-btn" class="btn">确认</button>
+        </div>
+    </div>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.5/purify.min.js"></script>
+    <script src="app.js"></script>
+    <script src="app.js"></script>
+
+</body>
+</html>
